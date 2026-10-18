@@ -13,9 +13,14 @@ window.EComApp = {
     user: null,
     activeCategory: null,
     searchQuery: '',
-    priceMax: 2000,
+    priceMax: 150000,
     sortBy: 'featured',
     selectedQuickViewProduct: null
+  },
+
+  formatPrice(amount) {
+    if (amount == null || isNaN(amount)) return '\u20B90';
+    return '\u20B9' + Math.round(Number(amount)).toLocaleString('en-IN');
   },
 
   async init() {
@@ -36,10 +41,17 @@ window.EComApp = {
       this.state.user = window.ECOM_INITIAL_DATA.currentUser;
     }
 
-    // Load saved cart
+    // Load saved cart & ensure INR prices
     const savedCart = localStorage.getItem('techmart_cart');
     if (savedCart) {
-      try { this.state.cart = JSON.parse(savedCart); } catch(e){}
+      try {
+        this.state.cart = JSON.parse(savedCart).map(item => {
+          const prod = this.state.products.find(p => p.id == item.productId);
+          if (prod) item.price = prod.price;
+          return item;
+        });
+        localStorage.setItem('techmart_cart', JSON.stringify(this.state.cart));
+      } catch(e){}
     }
 
     // 3. Render UI components
@@ -194,8 +206,8 @@ window.EComApp = {
               <span class="review-count">(${product.reviewCount || 0})</span>
             </div>
             <div class="product-price-row">
-              <span class="current-price">$${product.price.toFixed(2)}</span>
-              ${product.oldPrice ? `<span class="old-price">$${product.oldPrice.toFixed(2)}</span>` : ''}
+              <span class="current-price">${this.formatPrice(product.price)}</span>
+              ${product.oldPrice ? `<span class="old-price">${this.formatPrice(product.oldPrice)}</span>` : ''}
             </div>
             <div class="product-card-actions">
               <button class="btn-add-cart" onclick="EComApp.addToCart(${product.id})">
@@ -250,9 +262,9 @@ window.EComApp = {
 
     if (this.state.cart.length === 0) {
       tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 30px; color: var(--text-muted);">Your shopping cart is currently empty.</td></tr>`;
-      if (subtotalEl) subtotalEl.textContent = '$0.00';
-      if (taxEl) taxEl.textContent = '$0.00';
-      if (totalEl) totalEl.textContent = '$0.00';
+      if (subtotalEl) subtotalEl.textContent = this.formatPrice(0);
+      if (taxEl) taxEl.textContent = this.formatPrice(0);
+      if (totalEl) totalEl.textContent = this.formatPrice(0);
       return;
     }
 
@@ -268,11 +280,11 @@ window.EComApp = {
               <img class="cart-item-img" src="${item.imageUrl || 'img/laptop.png'}" alt="${item.name}" />
               <div>
                 <strong>${item.name}</strong><br/>
-                <span style="font-size: 11px; color: var(--text-muted);">$${item.price.toFixed(2)} each</span>
+                <span style="font-size: 11px; color: var(--text-muted);">${this.formatPrice(item.price)} each</span>
               </div>
             </div>
           </td>
-          <td>$${item.price.toFixed(2)}</td>
+          <td>${this.formatPrice(item.price)}</td>
           <td>
             <div class="qty-control">
               <button class="qty-btn" onclick="EComApp.updateCartQty(${item.id}, -1)">-</button>
@@ -280,7 +292,7 @@ window.EComApp = {
               <button class="qty-btn" onclick="EComApp.updateCartQty(${item.id}, 1)">+</button>
             </div>
           </td>
-          <td>$${lineSubtotal.toFixed(2)}</td>
+          <td>${this.formatPrice(lineSubtotal)}</td>
           <td>
             <button class="btn-outline-danger" onclick="EComApp.removeFromCart(${item.id})">Remove</button>
           </td>
@@ -288,13 +300,13 @@ window.EComApp = {
       `;
     }).join('');
 
-    const tax = subtotal * 0.08;
-    const shipping = subtotal > 50 ? 0 : 9.99;
+    const tax = Math.round(subtotal * 0.18);
+    const shipping = subtotal > 999 ? 0 : 99;
     const total = subtotal + tax + shipping;
 
-    if (subtotalEl) subtotalEl.textContent = `$${subtotal.toFixed(2)}`;
-    if (taxEl) taxEl.textContent = `$${tax.toFixed(2)} (Estimated)`;
-    if (totalEl) totalEl.textContent = `$${total.toFixed(2)}`;
+    if (subtotalEl) subtotalEl.textContent = this.formatPrice(subtotal);
+    if (taxEl) taxEl.textContent = `${this.formatPrice(tax)} (18% GST)`;
+    if (totalEl) totalEl.textContent = this.formatPrice(total);
   },
 
   updateCartQty(cartItemId, delta) {
@@ -337,8 +349,8 @@ window.EComApp = {
             <span class="review-count">(${product.reviewCount || 0} reviews)</span>
           </div>
           <div class="product-price-row" style="margin-bottom: 16px;">
-            <span class="current-price" style="font-size: 22px;">$${product.price.toFixed(2)}</span>
-            ${product.oldPrice ? `<span class="old-price" style="font-size: 15px;">$${product.oldPrice.toFixed(2)}</span>` : ''}
+            <span class="current-price" style="font-size: 22px;">${this.formatPrice(product.price)}</span>
+            ${product.oldPrice ? `<span class="old-price" style="font-size: 15px;">${this.formatPrice(product.oldPrice)}</span>` : ''}
           </div>
           <p class="quick-view-desc">${product.description}</p>
           <div style="margin-bottom: 20px;">
@@ -454,7 +466,7 @@ window.EComApp = {
       <tr>
         <td>#${p.id}</td>
         <td><strong>${p.name}</strong></td>
-        <td>$${p.price.toFixed(2)}</td>
+        <td>${this.formatPrice(p.price)}</td>
         <td>${p.stockQuantity}</td>
         <td>${p.brand}</td>
         <td>
@@ -489,11 +501,16 @@ window.EComApp = {
   resetFilters() {
     this.state.activeCategory = null;
     this.state.searchQuery = '';
-    this.state.priceMax = 2000;
+    this.state.priceMax = 150000;
     this.state.sortBy = 'featured';
 
     const searchInput = document.getElementById('headerSearchInput');
     if (searchInput) searchInput.value = '';
+
+    const priceRange = document.getElementById('priceRangeInput');
+    const priceVal = document.getElementById('priceRangeVal');
+    if (priceRange) priceRange.value = 150000;
+    if (priceVal) priceVal.textContent = this.formatPrice(150000);
 
     this.renderCategoryNav();
     this.applyFilters();
@@ -573,7 +590,7 @@ window.EComApp = {
     if (priceRange) {
       priceRange.addEventListener('input', (e) => {
         this.state.priceMax = parseFloat(e.target.value);
-        if (priceVal) priceVal.textContent = `$${this.state.priceMax}`;
+        if (priceVal) priceVal.textContent = this.formatPrice(this.state.priceMax);
         this.applyFilters();
       });
     }
